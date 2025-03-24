@@ -1,0 +1,10 @@
+langchain-text-splitters 
+langchain-community 
+langgraph
+sentence-transformers
+langchain[google-vertexai]
+langchain-google-genai
+langchain_huggingface
+langchain-qdrant
+fastembed
+pymongo
