@@ -175,3 +175,4 @@ cython_debug/
 .pypirc
 
 Qdrant_key.txt
+mongodb_pass.txt
