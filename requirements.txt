@@ -2,7 +2,7 @@ langchain-text-splitters
 langchain-community 
 langgraph
 sentence-transformers
-langchain[google-vertexai]
+FlagEmbedding
 langchain-google-genai
 langchain_huggingface
 langchain-qdrant
