@@ -64,7 +64,7 @@ class Generation:
             ("human", f"{question}"),
         ]
 
-        answer = llm.invoke(messages).content
+        answer = self.llm.invoke(messages).content
         print('check_question: ', answer)
         result = answer.lower() == "yes"
 
