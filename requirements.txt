@@ -8,3 +8,6 @@ langchain_huggingface
 langchain-qdrant
 fastembed
 pymongo
+fastapi 
+uvicorn 
+streamlit
