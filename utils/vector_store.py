@@ -9,7 +9,7 @@ from qdrant_client.http.models import Distance, SparseVectorParams, VectorParams
 QDRANT_URL = "https://291e3dc4-2f58-4a51-9795-3be0f4d2ae1d.us-east4-0.gcp.cloud.qdrant.io"
 with open("qdrant_read_key.txt", "r", encoding="utf-8") as file:
     QDRANT_API_KEY = file.read()
-COLLECTION_NAME = "law_collection"
+COLLECTION_NAME = "law_collection_backup"
 
 def init_vector_store():
     device = "cuda" if torch.cuda.is_available() else "cpu"

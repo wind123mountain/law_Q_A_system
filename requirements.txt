@@ -11,3 +11,6 @@ pymongo
 fastapi 
 uvicorn 
 streamlit
+transformers
+huggingface_hub
+tqdm
