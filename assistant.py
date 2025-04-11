@@ -7,8 +7,10 @@ from qdrant_client import models
 from langchain.schema import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
 from utils.custom_retriever import init_retriever
+from pinecone import Pinecone
 
 os.environ["GOOGLE_API_KEY"] = "AIzaSyDpQ3AgD14XuY6kFvRvUrh7jUsjJEhVpv4"
+PINECONE_API_KEY = "pcsk_5itBkb_GTNte2BWn24rQUJ9mpMYjzQQSRFpPeb8Kcxnmd2stspxTJfKtESS1r3M4ia4UzD"
 
 class Retrieval:
     def __init__(self, top_n=20, top_k=10):
@@ -39,6 +41,39 @@ class Retrieval:
         
         return top_k_docs
     
+class RetrievalAPI(Retrieval):
+    def __init__(self, top_n=20, top_k=10):
+        self.retriver = init_retriever()
+        condition = models.FieldCondition(key="metadata.status", 
+                                          match=models.MatchValue(value="Hết hiệu lực toàn bộ"))
+        self.retriver.search_kwargs['filter'] = models.Filter(must_not=[condition])
+        self.retriver.search_kwargs['k'] = top_n
+
+        self.top_k = top_k
+
+        self.pc_reranker = Pinecone(PINECONE_API_KEY)
+        
+    def search(self, query):
+        parent_docs, candidates =  self.retriver.invoke(query)
+        
+        print('qdrant response successfully')
+
+        if len(candidates) == 0:
+            return []
+        
+        inputs = [candidate[0].page_content for candidate in candidates]
+        results = self.pc_reranker.inference.rerank(model="bge-reranker-v2-m3",
+                                                    query=query, documents=inputs,
+                                                    top_n=self.top_k,
+                                                    return_documents=True,
+                                                    parameters={"truncate": "END"})
+
+
+        print('rerank response successfully')
+        
+        top_k_docs = [parent_docs[candidates[r.index][0].metadata['doc_id']] for r in results.data]
+        
+        return top_k_docs
 
 class Generation:
     def __init__(self):
@@ -97,8 +132,12 @@ class Generation:
         return ai_msg.content
     
 class Assistant:
-    def __init__(self, top_n=20, top_k=10):
-        self.retrieval = Retrieval(top_n, top_k)
+    def __init__(self, top_n=20, top_k=10, retrieval_api=True):
+        if retrieval_api:
+            self.retrieval = RetrievalAPI(top_n, top_k)
+        else:
+            self.retrieval = Retrieval(top_n, top_k)
+
         self.generation = Generation()
     
     def ask(self, question):
@@ -111,6 +150,6 @@ class Assistant:
 
         return answer
     
-def init_assistant():
-    assistant = Assistant(top_n=16, top_k=5)
+def init_assistant(retrieval_api=True):
+    assistant = Assistant(top_n=16, top_k=5, retrieval_api=retrieval_api)
     return assistant
