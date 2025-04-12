@@ -8,20 +8,20 @@ from redis import InvalidResponse
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", default=None)
-from tavily_search import functions_info, search
+from search_document_v2.tavily_search import functions_info, search
 
 logger = logging.getLogger(__name__)
+
 
 def get_openai_client():
     return OpenAI(api_key=OPENAI_API_KEY)
 
+
 client = get_openai_client()
 
+
 def openai_chat_complete(messages=(), model="gpt-4o-mini", raw=False):
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages
-    )
+    response = client.chat.completions.create(model=model, messages=messages)
     if raw:
         return response.choices[0].message
     output = response.choices[0].message
@@ -29,10 +29,11 @@ def openai_chat_complete(messages=(), model="gpt-4o-mini", raw=False):
 
 
 def gen_doc_prompt(docs):
-    """
-    """
-    doc_prompt = "Dưới đây là tài liệu về các điều luật liên quan đến câu hỏi của người dùng:"
-    for i,doc in enumerate(docs):
+    """ """
+    doc_prompt = (
+        "Dưới đây là tài liệu về các điều luật liên quan đến câu hỏi của người dùng:"
+    )
+    for i, doc in enumerate(docs):
         doc_prompt += f"{i}. {doc} \n"
     doc_prompt += "Kết thúc phần các tài liệu liên quan."
 
@@ -47,6 +48,7 @@ def generate_conversation_text(conversations):
         content = conversation.get("content", "")
         conversation_text += f"{role}: {content}\n"
     return conversation_text
+
 
 # Dựa vào history và câu hỏi hiện tại => Viết lại câu hỏi.
 def detect_user_intent(history, message):
@@ -70,7 +72,7 @@ def detect_user_intent(history, message):
     """
     openai_messages = [
         {"role": "system", "content": "You are an amazing virtual assistant"},
-        {"role": "user", "content": user_prompt}
+        {"role": "user", "content": user_prompt},
     ]
     logger.info(f"Rephrase input messages: {openai_messages}")
     # call openai
@@ -104,19 +106,23 @@ def detect_route(history, message):
     Classification (choose either "chitchat" or "legal"):
     """
     openai_messages = [
-        {"role": "system", "content": "You are a highly intelligent assistant that helps classify customer queries"},
-        {"role": "user", "content": user_prompt}
+        {
+            "role": "system",
+            "content": "You are a highly intelligent assistant that helps classify customer queries",
+        },
+        {"role": "user", "content": user_prompt},
     ]
     logger.info(f"Route output: {openai_messages}")
     # call openai
     return openai_chat_complete(openai_messages)
+
 
 # define agent for process search internet + gen response
 def get_legal_agent_anwer(messages):
     logger.info(f"Call tavily tool search")
 
     response = client.chat.completions.create(
-        model= 'gpt-4o-mini',
+        model="gpt-4o-mini",
         messages=messages,
         functions=functions_info,
         function_call={"name": "search"},
@@ -124,13 +130,9 @@ def get_legal_agent_anwer(messages):
     args = json.loads(response.choices[0].message.function_call.arguments)
     logger.info(f"Args: {args}")
     observation = search(**args)
-    full_message = messages + [{
-            "role": "user",
-            "content": observation
-    }]
+    full_message = messages + [{"role": "user", "content": observation}]
     response = openai_chat_complete(full_message)
     return response
-
 
 
 if __name__ == "__main__":

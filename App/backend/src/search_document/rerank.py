@@ -1,6 +1,7 @@
 import torch
 from FlagEmbedding import FlagReranker
 
+
 class BGEReranker:
     def __init__(self, model_name: str, use_fp16: bool = True):
         """
@@ -35,22 +36,17 @@ class BGEReranker:
 
 
 if __name__ == "__main__":
-    
+
     model_name = "/home/ivirse/ivirse_all_data/namnt/soict/checkpoint/rerank/bge_v2_part2/checkpoint-225000"
     reranker = BGEReranker(model_name)
-    
+
     query = "Xe máy không đội mũ bảo hiểm bị phạt bao nhiêu tiền?"
     list_doc = [
         "Xe ô tô sẽ bị phạt 5000000 đ nếu đi sai làn đường.",
         "Nếu trong TH xe máy không đội mũ bảo hiểm sẽ bị phạt 200.000 đ.",
-        "Nếu đi ngược chiều thì sẽ bị phạt nhiều tiền kể cả xe máy và ô tô."
+        "Nếu đi ngược chiều thì sẽ bị phạt nhiều tiền kể cả xe máy và ô tô.",
     ]
-    
-    output = reranker.rerank(query, list_doc)
-    
-    print(output)
-    
-    
-    
 
-    
+    output = reranker.rerank(query, list_doc)
+
+    print(output)

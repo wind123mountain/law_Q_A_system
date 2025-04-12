@@ -1,11 +1,12 @@
 import os
-import torch
+
 import numpy as np
-from FlagEmbedding.abc.inference import AbsReranker
+import torch
 from FlagEmbedding import FlagReranker
-from qdrant_client import models
+from FlagEmbedding.abc.inference import AbsReranker
 from langchain.schema import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
+from qdrant_client import models
 from utils.custom_retriever import init_retriever
 from pinecone import Pinecone
 

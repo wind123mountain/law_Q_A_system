@@ -177,3 +177,7 @@ cython_debug/
 
 Qdrant_key.txt
 mongodb_pass.txt
+mongo_data
+pretrained
+.vscode
+.streamlit
