@@ -20,7 +20,7 @@ def get_conversation_id(bot_id, user_id, ttl_seconds=3600):
         if redis_client.exists(key):
             print(f"-------------key cho conversation này đã tồn tại")
             redis_client.expire(key, ttl_seconds)
-            return redis_client.get(key).decode('utf-8')
+            return redis_client.get(key).decode("utf-8")
         else:
             print(f"-----------------Thực hiện gen key mới cho conversation này")
             conversation_id = generate_request_id()

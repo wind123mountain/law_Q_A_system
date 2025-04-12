@@ -2,49 +2,59 @@ import json
 import logging
 import os
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from tavily_search import functions_info, search
+from assistant import Assistant
+
+# from langchain_google_genai import ChatGoogleGenerativeAI
+from search_document_v2.tavily_search import functions_info, search
 
 logger = logging.getLogger(__name__)
+TOP_K_HISTORY = 10
 
-def get_openai_client():
-    return ChatGoogleGenerativeAI(
-    model="gemini-2.0-flash",
-    temperature=0,
-    max_tokens=None,
-    timeout=None,
-    max_retries=2,
-    # other params...
-)
+# def get_gemini_client():
+#     return ChatGoogleGenerativeAI(
+#         model="gemini-2.0-flash",
+#         temperature=0,
+#         max_tokens=None,
+#         timeout=None,
+#         max_retries=2,
+#         # other params...
+#     )
+
+# client = get_gemini_client()
+assistant = Assistant(top_n=16, top_k=5)
 
 
-
-client = get_openai_client()
-
-def openai_chat_complete(messages=()):
-    ai_msg = client.invoke(messages)
+def gemini_chat_complete(messages=()):
+    ai_msg = assistant.generation.llm.invoke(messages)
     return ai_msg.content
 
 
 def gen_doc_prompt(docs):
-    """
-    """
-    doc_prompt = "Dưới đây là tài liệu về các điều luật liên quan đến câu hỏi của người dùng:"
-    for i,doc in enumerate(docs):
+    """ """
+    doc_prompt = (
+        "Dưới đây là tài liệu về các điều luật liên quan đến câu hỏi của người dùng:"
+    )
+    for i, doc in enumerate(docs):
         doc_prompt += f"{i}. {doc} \n"
     doc_prompt += "Kết thúc phần các tài liệu liên quan."
+
+    # print("LIEN QUAN: ", doc_prompt)
 
     return doc_prompt
 
 
 def generate_conversation_text(conversations):
     conversation_text = ""
-    for conversation in conversations:
+    for conversation in conversations[:TOP_K_HISTORY]:
         logger.info("Generate conversation: {}".format(conversation))
-        role = conversation.get("role", "user")
-        content = conversation.get("content", "")
-        conversation_text += f"{role}: {content}\n"
+        if len(conversation) == 1:
+            conversation_text += f"{content}\n"
+            continue
+        elif len(conversation) == 2:
+            role, content = conversation
+            conversation_text += f"{role}: {content}\n"
     return conversation_text
+
 
 # Dựa vào history và câu hỏi hiện tại => Viết lại câu hỏi.
 def detect_user_intent(history, message):
@@ -66,13 +76,13 @@ def detect_user_intent(history, message):
 
     Answer:
     """
-    openai_messages = [
-        {"role": "system", "content": "You are an amazing virtual assistant"},
-        {"role": "user", "content": user_prompt}
+    gemini_messages = [
+        ("system", "You are an amazing virtual assistant"),
+        ("human", user_prompt),
     ]
-    logger.info(f"Rephrase input messages: {openai_messages}")
-    # call openai
-    return openai_chat_complete(openai_messages)
+    logger.info(f"Rephrase input messages: {gemini_messages}")
+    # call gemini
+    return gemini_chat_complete(gemini_messages)
 
 
 # Classify xem câu query thuộc loại nào?
@@ -101,30 +111,23 @@ def detect_route(history, message):
 
     Classification (choose either "chitchat" or "legal"):
     """
-    openai_messages = [
-        ("system", "You are a highly intelligent assistant that helps classify customer queries"),
-        ("human", user_prompt)
+    gemini_messages = [
+        (
+            "system",
+            "You are a highly intelligent assistant that helps classify customer queries",
+        ),
+        ("human", user_prompt),
     ]
-    logger.info(f"Route output: {openai_messages}")
-    # call openai
-    return openai_chat_complete(openai_messages)
+    logger.info(f"Route output: {gemini_messages}")
+    # call gemini
+    return gemini_chat_complete(gemini_messages)
+
 
 # define agent for process search internet + gen response
 def get_legal_agent_anwer(messages):
     logger.info(f"Call tavily tool search")
-    
+
     observation = search(messages[-1][1])
-    full_message = messages + [(
-            "human",
-            observation
-    )]
-    response = openai_chat_complete(full_message)
+    full_message = messages + [("human", observation)]
+    response = gemini_chat_complete(full_message)
     return response
-
-
-
-if __name__ == "__main__":
-    history = [{"role": "system", "content": "You are an amazing virtual assistant"}]
-    message = "Hello"
-    output_detect = detect_route(history, message)
-    print(output_detect)

@@ -3,7 +3,7 @@ from datetime import datetime
 
 from cache import get_conversation_id
 from pymongo import MongoClient
-from utils import setup_logging
+from utils import generate_request_id, setup_logging
 
 setup_logging()
 logger = logging.getLogger(__name__)
@@ -12,9 +12,21 @@ logger = logging.getLogger(__name__)
 client = MongoClient("mongodb://mongo_db:27017/")
 db = client["final_project"]
 chat_conversations = db["history_chat"]
+users = db["users"]
+
 
 class ChatConversation:
-    def __init__(self, conversation_id, bot_id, user_id, message, is_request=True, completed=False, created_at=None, updated_at=None):
+    def __init__(
+        self,
+        conversation_id,
+        bot_id,
+        user_id,
+        message,
+        is_request=True,
+        completed=False,
+        created_at=None,
+        updated_at=None,
+    ):
         self.conversation_id = conversation_id
         self.bot_id = bot_id
         self.user_id = user_id
@@ -33,7 +45,7 @@ class ChatConversation:
             "is_request": self.is_request,
             "completed": self.completed,
             "created_at": self.created_at,
-            "updated_at": self.updated_at
+            "updated_at": self.updated_at,
         }
 
     @classmethod
@@ -46,13 +58,15 @@ class ChatConversation:
             is_request=data["is_request"],
             completed=data["completed"],
             created_at=data["created_at"],
-            updated_at=data["updated_at"]
+            updated_at=data["updated_at"],
         )
 
 
 def load_conversation(conversation_id: str):
     # MongoDB query to load conversations
-    conversations = chat_conversations.find({"conversation_id": conversation_id}).sort("created_at")
+    conversations = chat_conversations.find({"conversation_id": conversation_id}).sort(
+        "created_at"
+    )
     return [ChatConversation.from_dict(convo) for convo in conversations]
 
 
@@ -82,14 +96,8 @@ def read_conversation(conversation_id: str):
 #     return conversation_list
 
 
-
 def convert_conversation_to_gemini_messages(user_conversations):
-    conversation_list = [
-        (
-            "system",
-            "You are an amazing virtual assistant"
-        )
-    ]
+    conversation_list = [("system", "You are an amazing virtual assistant")]
 
     for conversation in user_conversations:
         role = "assistant" if not conversation.is_request else "human"
@@ -101,9 +109,17 @@ def convert_conversation_to_gemini_messages(user_conversations):
     return conversation_list
 
 
-def update_chat_conversation(bot_id: str, user_id: str, message: str, is_request: bool = True):
+def update_chat_conversation(
+    bot_id: str,
+    user_id: str,
+    conversation_id: str,
+    message: str,
+    is_request: bool = True,
+):
     # Step 1: Create a new ChatConversation instance
-    conversation_id = get_conversation_id(bot_id, user_id)
+
+    if conversation_id == "new_chat":
+        conversation_id = generate_request_id()
 
     new_conversation = ChatConversation(
         conversation_id=conversation_id,
