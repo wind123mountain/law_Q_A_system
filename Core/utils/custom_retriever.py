@@ -11,9 +11,14 @@ from langchain_core.callbacks import (
 from qdrant_client import models
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain.retrievers.multi_vector import SearchType
-from langchain.schema import Document
 from utils.mongodb_store import MongoDBDocstore
 from utils.vector_store import init_vector_store
+
+
+MONGODB_USER = "reader"
+with open("mongo_read_pass.txt", "r", encoding="utf-8") as file:
+    MONGODB_PASS = file.read()
+MONGODB_URL = f"mongodb+srv://<user>:<pass_word>@cluster.ovvrd.mongodb.net/?retryWrites=true&w=majority&appName=cluster"
 
 class CustomParentDocumentRetriever(ParentDocumentRetriever):
     batch_size: int = 32
@@ -112,12 +117,9 @@ class CustomParentDocumentRetriever(ParentDocumentRetriever):
         docs = await self.docstore.amget(ids)
         return docs, chunks
 
-def init_retriever():
-    with open("mongo_read_pass.txt", "r", encoding="utf-8") as file:
-        mongodb_pass = file.read()
-
-    mongodb_url = f"mongodb+srv://reader:{mongodb_pass}@cluster.ovvrd.mongodb.net/?retryWrites=true&w=majority&appName=cluster"
-    mongodb_doc_store = MongoDBDocstore(mongodb_url)
+def init_retriever(mongodb_db="law"):
+    mongodb_url = MONGODB_URL.replace("<user>", MONGODB_USER).replace("<pass_word>", MONGODB_PASS)
+    mongodb_doc_store = MongoDBDocstore(mongodb_url=mongodb_url, db=mongodb_db)
 
     parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=0, 
                                                     separators=[r'\n (?<!“)Điều \d+\. '], 
