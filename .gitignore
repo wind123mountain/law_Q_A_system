@@ -1,5 +1,6 @@
 Data/
 bge-m3-output/
+bge-m3-reranker-output/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

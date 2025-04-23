@@ -14,3 +14,6 @@ streamlit
 transformers
 huggingface_hub
 tqdm
+faiss-cpu
+pyvi 
+rank_bm25
