@@ -1,4 +1,4 @@
-# 🚀 Vietnamese Businiess Q&A System  
+![image](https://github.com/user-attachments/assets/3f9ae4c5-9132-4477-92b6-01ba2b6c0e4b)# 🚀 Vietnamese Businiess Q&A System  
 ## **Project structure**
 ```
 ├── App
@@ -135,3 +135,22 @@ Start server & ui
 ```bash
 docker-compose up -d
 ```
+
+## **Result**
+### Evaluate: The evaluation metrics currently in use are:
+
+  - **Recall@k**: Number of positive found / Total positive
+  - **Acc@k**: The returned result has at least 1 positive.
+  
+  Test on 2000 questions
+  
+  |Model                    | recall@3  | recall@5  | recall@10 | acc@3     | acc@5     | acc@10    |
+  |-------------------------|-----------|-----------|-----------|-----------|-----------|-----------|
+  |BGE-m3                   | 0.6264    | 0.7116    | 0.8007    | 0.7856	  | 0.8589	  | 0.917     |
+  |BGE-M3 + reank           | 0.6409    | 0.7259    | 0.8077    | 0.8047  	| 0.875	    | 0.9199    |
+  |BGE-M3 + BM25 + reank    | 0.6506    | 0.7299    | 0.814     | 0.8101	  | 0.8735	  | 0.9209    |
+
+
+### **Demo**
+![image](https://github.com/user-attachments/assets/dc4164f3-ff87-4a18-914d-6c0e2a0f738a)
+
