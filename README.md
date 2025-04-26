@@ -155,5 +155,6 @@ The evaluation metrics currently in use are:
 
 
 ### **Demo**
-![image](https://github.com/user-attachments/assets/dc4164f3-ff87-4a18-914d-6c0e2a0f738a)
+![image](https://github.com/user-attachments/assets/8a3ee0a7-93e9-4439-b7c8-831e83864a1b)
+
 
