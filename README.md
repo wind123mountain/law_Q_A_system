@@ -71,17 +71,10 @@
 ├── preprocessing.ipynb                             # preprocessing data notebook
 └── test.ipynb                                      # test notebook
 ```
-## **Docker**:
-Build images
-```bash
-docker build --pull --rm -f 'App\backend\Dockerfile' -t 'be_qa:3003' 'App\backend'
-```
-
-```bash
-docker build --pull --rm -f 'App\chatbot-ui\Dockerfile' -t 'ui:3003' 'App\chatbot-ui'
-```
-
-Setup **App\backend\src\.env** file:
+## **Docker**
+### **Setup config, environment variables**
+#### Setup backend:
+- **App/backend/src/.env**
 ```
 MONGODB_URL=mongodb://user:password@host:port/dbname
 QDRANT_URL=http://qdrant:6333
@@ -97,8 +90,8 @@ CELERY_RESULT_BACKEND = redis://localhost:6379
 NVIDIA_API_KEY=your_nvidia_api_key
 ```
 
-Add streamlit env:
-- **App\chatbot-ui\.streamlit\pages_sections.toml**
+#### Add streamlit env:
+- **App/chatbot-ui/.streamlit/pages_sections.toml**
 ```
 [[pages]]
 path = "pages/home.py"
@@ -116,7 +109,7 @@ name = "Chat history"
 icon = ""
 is_section = true
 ```
-- **App\chatbot-ui\.streamlit\secrets.toml**
+- **App/chatbot-ui/.streamlit/secrets.toml**
 ```
 [auth]
 redirect_uri = "http://localhost:8501/oauth2callback"
@@ -126,12 +119,21 @@ client_secret = "<your_key>"
 server_metadata_url = "https://accounts.google.com/.well-known/openid-configuration"
 
 ```
-- **App\chatbot-ui\.env**
+- **App/chatbot-ui/.env**
 ```
 BACKEND_URL=http://fastapi_app:8002
 ```
 
-Start server & ui
+### **Build images**
+```bash
+docker build --pull --rm -f 'App\backend\Dockerfile' -t 'be_qa:3003' 'App\backend'
+```
+
+```bash
+docker build --pull --rm -f 'App\chatbot-ui\Dockerfile' -t 'ui:3003' 'App\chatbot-ui'
+```
+
+### **Start server & ui**
 ```bash
 docker-compose up -d
 ```
