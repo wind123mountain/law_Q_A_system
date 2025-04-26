@@ -51,7 +51,7 @@ def bot_route_answer_message(history, question):
     # detect the route
     result, explanation = assistant.router(history_messages, new_question)
     if not result:
-        logger.info(f"Router to chitchat")
+        logger.warning(f"Router to chitchat")
         return explanation
     else:
         return bot_answer_message(history_messages, new_question)

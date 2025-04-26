@@ -141,7 +141,7 @@ if prompt := st.chat_input("Bạn muốn hỏi gì về luật liên quan đến
 
     # Display assistant response in chat message container
     with st.chat_message("assistant"):
-        searching = st.markdown(f" Searching...")
+        searching = st.markdown(" Searching...")
         resp_message, chat_id = response_generator(prompt, converation_id)
         searching.empty()
         response = st.write_stream(resp_message)

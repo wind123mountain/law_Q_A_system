@@ -102,16 +102,16 @@ class Generation:
         messages_explanation = [
             (
                 "system",
-                "You are an expert lawyer in Vietnam, tasked with answering only asked \
+                f"You are an expert lawyer in Vietnam, tasked with answering only asked \
                     questions from customers about Vietnamese business Law. \
                         You are asked one sentence unrelated to Vietnamese business Law. \
-                            Please answer so that the customer can understand it. Please answer in Vietnamese.",
+                            Please answer logically and rationally in Vietnamese.\
+                            \n\n Below is the history conversation: \n \"{history_summary}\" ",
             ),
             ("human", f"{question}"),
         ]
 
         answer = self.llm.invoke(messages).content
-        print("check_question: ", answer)
         result = answer.lower() == "yes"
 
         if not result:
@@ -133,12 +133,11 @@ class Generation:
                 "system",
                 f"You are an expert lawyer in Vietnam, \
                     tasked with answering asked questions from customers about Vietnamese \
-                    business Law based on the given information and history conversation. \
+                    business Law based on the given information. \
                     Please use, gather, and deduce based on the knowledge in the following \
                     information to answer the user’s question in Vietnamese. \
                     Please respond accurately, fully, clearly citing the law. \n \
-                    - Relevant legal information: \n {context} \n\
-                    - History conversation: \n \"{history_summary}\"",
+                    Relevant legal information: \n {context} ",
             ),
             ("human", f"{question}"),
         ]
