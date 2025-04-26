@@ -1,4 +1,4 @@
-![image](https://github.com/user-attachments/assets/3f9ae4c5-9132-4477-92b6-01ba2b6c0e4b)# 🚀 Vietnamese Businiess Q&A System  
+# 🚀 Vietnamese Businiess Q&A System  
 ## **Project structure**
 ```
 ├── App
