@@ -137,7 +137,8 @@ docker-compose up -d
 ```
 
 ## **Result**
-### Evaluate: The evaluation metrics currently in use are:
+### Evaluate
+The evaluation metrics currently in use are:
 
   - **Recall@k**: Number of positive found / Total positive
   - **Acc@k**: The returned result has at least 1 positive.
