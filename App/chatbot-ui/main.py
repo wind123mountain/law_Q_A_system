@@ -27,13 +27,13 @@ if st.experimental_user.is_logged_in:
     convs = fetch_conversations(st.experimental_user.email)
     st.sidebar.button("Log out", on_click=st.logout, use_container_width=True)
     nav["Chat history"] = []
-    for conv in convs:
+    for conv, mess in convs:
         if conv == st.query_params.get("id"):
             continue
         nav["Chat history"] += [
             st.Page(
                 "pages/chat.py",
-                title=conv,
+                title=mess,
                 icon="💬",
                 url_path=conv,
             )

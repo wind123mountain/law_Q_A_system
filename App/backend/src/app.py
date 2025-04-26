@@ -75,10 +75,17 @@ async def conversations(id: str, request: Request):
 async def conversations(request: Request):
     user_id = request.headers.get("user_id")
     conversations = chat_conversations.find({"user_id": user_id}).sort("created_at", -1)
+
+    seen = set()
+    unique_conversations = []
+
+    for conv in conversations:
+        cid = conv["conversation_id"]
+        if conv["is_request"] and cid not in seen:
+            seen.add(cid)
+            unique_conversations.append((cid, conv["message"]))
     return {
-        "result": list(
-            dict.fromkeys([conv["conversation_id"] for conv in conversations])
-        )
+        "result": unique_conversations
     }
 
 
