@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+import os
 
 from cache import get_conversation_id
 from pymongo import MongoClient
@@ -8,8 +9,9 @@ from utils import generate_request_id, setup_logging
 setup_logging()
 logger = logging.getLogger(__name__)
 
+
 # MongoDB client setup
-client = MongoClient("mongodb://mongo_db:27017/")
+client = MongoClient(os.getenv("MONGODB_ADMIN_URL", "mongodb://mongo_db:27017/"))
 db = client["final_project"]
 chat_conversations = db["history_chat"]
 users = db["users"]
@@ -78,26 +80,8 @@ def read_conversation(conversation_id: str):
     return ChatConversation.from_dict(db_conversation)
 
 
-# def convert_conversation_to_openai_messages(user_conversations):
-#     conversation_list = [
-#         {
-#             "role": "system",
-#             "content": "You are an amazing virtual assistant"
-#         }
-#     ]
-
-#     for conversation in user_conversations:
-#         role = "assistant" if not conversation.is_request else "user"
-#         content = str(conversation.message)
-#         conversation_list.append({"role": role, "content": content})
-
-#     logging.info(f"Create conversation to {conversation_list}")
-
-#     return conversation_list
-
-
 def convert_conversation_to_gemini_messages(user_conversations):
-    conversation_list = [("system", "You are an amazing virtual assistant")]
+    conversation_list = []
 
     for conversation in user_conversations:
         role = "assistant" if not conversation.is_request else "human"

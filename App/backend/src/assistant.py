@@ -3,12 +3,14 @@ import os
 import numpy as np
 import torch
 from FlagEmbedding import FlagReranker
-from FlagEmbedding.abc.inference import AbsReranker
 from langchain.schema import Document
 from langchain_google_genai import ChatGoogleGenerativeAI
 from pinecone import Pinecone
 from qdrant_client import models
 from search_document_v2.custom_retriever import init_retriever
+
+
+THRESHOLD_SCORE_RERANK = 0.5
 
 
 class Singleton(type):
@@ -41,9 +43,7 @@ class Retrieval(metaclass=Singleton):
         # self.reranker = reranker
 
     def search(self, query):
-        print("---START SEARCH---", query)
         parent_docs, candidates = self.retriever.invoke(query)
-        print("---END SEARCH---", len(parent_docs))
         if len(candidates) == 0:
             return []
 
@@ -66,6 +66,9 @@ class Retrieval(metaclass=Singleton):
 
         top_k_docs = []
         for i in range(self.top_k):
+            if rerank_results.data[i].score < THRESHOLD_SCORE_RERANK:
+                break
+
             top_k_docs.append(
                 parent_docs[
                     candidates[rerank_results.data[i].index][0].metadata["doc_id"]
@@ -86,11 +89,12 @@ class Generation:
             max_retries=2,
         )
 
-    def check_question(self, question):
+    def check_question(self, question, history_summary=None):
         messages = [
             (
                 "human",
-                f'Câu hỏi:"{question}" có phải là câu hỏi về luật doanh nghiệp Việt Nam không? \
+                f'Cho tóm tắt lịch sử đoạn hội thoại sau: "{history_summary}". \n\n\
+                    Câu hỏi tiếp theo:"{question}" có phải là câu hỏi liên quan đến lĩnh vực luật doanh nghiệp Việt Nam không? \
                 Chỉ trả lời "yes" hoặc "no".',
             ),
         ]
@@ -100,8 +104,8 @@ class Generation:
                 "system",
                 "You are an expert lawyer in Vietnam, tasked with answering only asked \
                     questions from customers about Vietnamese business Law. \
-                        You are asked one question unrelated to Vietnamese business Law. \
-                            Please answer in Vietnamese so that the customer understands.",
+                        You are asked one sentence unrelated to Vietnamese business Law. \
+                            Please answer so that the customer can understand it. Please answer in Vietnamese.",
             ),
             ("human", f"{question}"),
         ]
@@ -117,8 +121,7 @@ class Generation:
 
         return result, explanation
 
-    def generate(self, question, docs: Document):
-
+    def generate(self, question, docs: Document, history_summary=None):
         context = [
             f"- doc 1: + info:{doc.metadata} \n + content:{doc.page_content}"
             for doc in docs
@@ -129,10 +132,33 @@ class Generation:
             (
                 "system",
                 f"You are an expert lawyer in Vietnam, \
-                    tasked with answering only asked questions from customers about Vietnamese \
-                        business Law based on the given information. Please use, gather, and deduce based on the \
-                            knowledge in the following information to answer the user’s question. \
-                                Please respond accurately, fully, clearly citing the law. \n Relevant legal information: \n {context}",
+                    tasked with answering asked questions from customers about Vietnamese \
+                    business Law based on the given information and history conversation. \
+                    Please use, gather, and deduce based on the knowledge in the following \
+                    information to answer the user’s question in Vietnamese. \
+                    Please respond accurately, fully, clearly citing the law. \n \
+                    - Relevant legal information: \n {context} \n\
+                    - History conversation: \n \"{history_summary}\"",
+            ),
+            ("human", f"{question}"),
+        ]
+
+        ai_msg = self.llm.invoke(messages)
+
+        return ai_msg.content
+    
+    def generate_for_search_internet(self, question, context, history_summary=None):
+        
+        messages = [
+            (
+                "system",
+                f"You are an expert lawyer in Vietnam, \
+                    tasked with answering asked questions from customers about Vietnamese \
+                    business Law based on the searched internet information and history conversation. \
+                    Please use, gather, and deduce based on the knowledge in the following internet \
+                    information to answer the user’s question in Vietnamese. Please respond accurately, full. \n \
+                    - Internet informationn: \n {context} \n\
+                    - History conversation: \n \"{history_summary}\"",
             ),
             ("human", f"{question}"),
         ]
@@ -146,16 +172,38 @@ class Assistant(metaclass=Singleton):
     def __init__(self, top_n=20, top_k=10):
         self.retrieval = Retrieval(top_n, top_k)
         self.generation = Generation()
+        self.llm = self.generation.llm
 
-    # def ask(self, question):
-    #     result, explanation = self.generation.check_question(question)
-    #     if not result:
-    #         return explanation
+    def ask(self, question):
+        result, explanation = self.generation.check_question(question)
+        if not result:
+            return explanation
 
-    #     docs = self.retrieval.search(question)
-    #     answer = self.generation.generate(question, docs)
+        docs = self.retrieval.search(question)
+        answer = self.generation.generate(question, docs)
 
-    #     return answer
+        return answer
+    
+    def get_history_summary(self, history_summary, question_answer):
+        messages = [
+            (
+                "system",
+                "You are an expert at summarizing legal conversations. \
+                    Please summarize the provided Vietnamese conversation by user, \
+                        limit from 500 to 1000 words (do not skip any questions).",
+            ),
+            ("human", 
+             f"- Cho đoạn tóm tắt hội thoại sau: \"{history_summary}\" \n\
+                - Cho đoạn hội thoại kế tiếp: \"{question_answer}\" \n\
+                    \n Hãy tóm tắt tiếp đoạn hội thoại."
+            )
+        ]
+        
+        ai_msg = self.llm.invoke(messages)
+        return ai_msg.content
+    
+    def router(self, history, question):
+        return self.generation.check_question(question, history)
 
 
 def init_assistant():

@@ -1,24 +1,16 @@
 import json
 import logging
 import time
+import os
 
 import requests
 import streamlit as st
 from menu import menu_with_redirect
 from service import fetch_conversation_details
-from streamlit.runtime import get_instance
-from streamlit.runtime.runtime import RuntimeState
 from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
-from tenacity import retry, stop_after_attempt, wait_exponential
 
 # Redirect to app.py if not logged in, otherwise show the navigation menu
 menu_with_redirect()
-
-# st.title("🤖 Chatbot Interface")
-
-# rt_inst = get_instance()
-# if rt_inst.state == RuntimeState.ONE_OR_MORE_SESSIONS_CONNECTED:
-#     ctx = get_script_run_ctx()
 
 ctx = get_script_run_ctx()
 all_app_pages = ctx.pages_manager.get_pages()
@@ -36,33 +28,39 @@ header.title(f"🤖 AI Legal assistant")
 header.write("""<div class='fixed-header'/>""", unsafe_allow_html=True)
 
 ### Custom CSS for the sticky header
-st.markdown(
-    """
-<style>
-    div[data-testid="stVerticalBlock"] div:has(div.fixed-header) {
-        position: sticky;
-        top: 2.875rem;
-        background-color: white;
-        z-index: 999;
+st.markdown("""
+    <style>
+    .dark-container {
+        padding: 20px;
+        border-radius: 10px;
+        color: white;
     }
-    .fixed-header {
-        border-bottom: 1px solid black;
+
+    @media (prefers-color-scheme: dark) {
+        .dark-container {
+            background-color: #1e1e1e;
+        }
     }
-</style>
-    """,
-    unsafe_allow_html=True,
-)
+
+    @media (prefers-color-scheme: light) {
+        .dark-container {
+            background-color: #f0f0f0;
+            color: black;
+        }
+    }
+    </style>
+""", unsafe_allow_html=True)
+
 
 # Input bot
 bot_id = "botLegal"
 user_id = st.experimental_user.email
-BACKEND_URL = "http://fastapi_app:8002"
+BACKEND_URL = os.getenv("BACKEND_URL", "http://fastapi_app:8002")
 converation_id = st.query_params.get("id", current_page["url_pathname"])
 
 
 def send_user_request(text, chat_id):
     url = f"{BACKEND_URL}/chat/complete"
-    print("send ", st.query_params.get("id", chat_id))
 
     payload = json.dumps(
         {
@@ -94,7 +92,6 @@ def get_chat_complete(text, chat_id):
     request_id = user_request["task_id"]
     status_code, chat_response = get_bot_response(request_id)
     if status_code == 200:
-        print(chat_response)
         return (
             chat_response["task_result"]["content"],
             chat_response["task_result"]["chat_id"],
@@ -135,7 +132,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # Accept user input
-if prompt := st.chat_input("What is up?"):
+if prompt := st.chat_input("Bạn muốn hỏi gì về luật liên quan đến doanh nghiệp?"):
     # Add user message to chat history
     st.session_state.messages.append({"role": "user", "content": prompt})
     # Display user message in chat message container
@@ -144,7 +141,9 @@ if prompt := st.chat_input("What is up?"):
 
     # Display assistant response in chat message container
     with st.chat_message("assistant"):
+        searching = st.markdown(f" Searching...")
         resp_message, chat_id = response_generator(prompt, converation_id)
+        searching.empty()
         response = st.write_stream(resp_message)
     # Add assistant response to chat history
     st.session_state.messages.append({"role": "assistant", "content": response})

@@ -1,2 +1,2 @@
 #!/bin/bash
-streamlit run chat_interface.py --server.port 8000
+streamlit run main.py --server.port 8501

@@ -176,6 +176,7 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+nvidia_key.text
 Qdrant_key.txt
 mongodb_pass.txt
 mongo_data

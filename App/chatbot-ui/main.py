@@ -1,11 +1,6 @@
-# import streamlit as st
+from dotenv import load_dotenv
 
-# pg = st.navigation([
-#     st.Page("chat_login.py", title="Home", icon="🏠"),
-#     st.Page("pages/chat.py", title="Chat", icon="💬"),
-# ])
-
-# pg.run()
+load_dotenv()
 
 import streamlit as st
 from service import fetch_conversations
@@ -20,6 +15,15 @@ nav = get_nav_from_toml(
 )
 
 if st.experimental_user.is_logged_in:
+    nav["New Chat"] = [
+            st.Page(
+                "pages/new_chat.py",
+                title="New chat",
+                icon="💬",
+                url_path="new",
+            )
+        ]
+
     convs = fetch_conversations(st.experimental_user.email)
     st.sidebar.button("Log out", on_click=st.logout, use_container_width=True)
     nav["Chat history"] = []

@@ -1,3 +1,7 @@
+from dotenv import load_dotenv
+
+load_dotenv()
+
 import asyncio
 import logging
 import time
@@ -136,7 +140,7 @@ async def get_response(task_id: str):
         task_status = task_result.status
 
         # Ghi log trạng thái task
-        logger.info(f"Task ID: {task_id}, Status: {task_status}")
+        # logger.info(f"Task ID: {task_id}, Status: {task_status}")
 
         # Nếu task đã hoàn tất, trả về kết quả
         if task_status not in ("PENDING", "STARTED"):

@@ -17,3 +17,4 @@ tqdm
 faiss-cpu
 pyvi 
 rank_bm25
+openai

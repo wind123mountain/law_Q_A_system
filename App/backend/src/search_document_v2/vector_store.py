@@ -5,10 +5,13 @@ from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 from langchain_qdrant import FastEmbedSparse, QdrantVectorStore, RetrievalMode
 from qdrant_client import QdrantClient, models
 from qdrant_client.http.models import Distance, SparseVectorParams, VectorParams
+from .custom_embedding import M3EmbeddingsAPI
 
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 COLLECTION_NAME = "law_collection_backup"
+
+NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", None)
 
 
 def init_vector_store():
@@ -18,12 +21,16 @@ def init_vector_store():
     model_name = "BAAI/bge-m3"
     model_kwargs = {"torch_dtype": torch.float16, "device": device}
     encode_kwargs = {"batch_size": 8, "normalize_embeddings": True}
-    bge_m3_emb = HuggingFaceBgeEmbeddings(
-        model_name=model_name,
-        model_kwargs=model_kwargs,
-        encode_kwargs=encode_kwargs,
-        query_instruction="",
-    )
+
+    if NVIDIA_API_KEY:
+        bge_m3_emb = M3EmbeddingsAPI(nvidia_api_key=NVIDIA_API_KEY)
+    else:
+        bge_m3_emb = HuggingFaceBgeEmbeddings(
+            model_name=model_name,
+            model_kwargs=model_kwargs,
+            encode_kwargs=encode_kwargs,
+            query_instruction="",
+        )
 
     sparse_embeddings = FastEmbedSparse(model_name="Qdrant/bm25")
 
