@@ -8,6 +8,7 @@ import streamlit as st
 from menu import menu_with_redirect
 from service import fetch_conversation_details
 from streamlit.runtime.scriptrunner_utils.script_run_context import get_script_run_ctx
+from streamlit_star_rating import st_star_rating
 
 # Redirect to app.py if not logged in, otherwise show the navigation menu
 menu_with_redirect()
@@ -145,6 +146,9 @@ if prompt := st.chat_input("Bạn muốn hỏi gì về luật liên quan đến
         resp_message, chat_id = response_generator(prompt, converation_id)
         searching.empty()
         response = st.write_stream(resp_message)
+        stars = st_star_rating("Bạn có hài lòng với câu trả lời không?",
+                               maxValue=5, defaultValue=3, size=21, key="rating",
+                               customCSS="h3 {font-size: 15px}")
     # Add assistant response to chat history
     st.session_state.messages.append({"role": "assistant", "content": response})
     if converation_id == "new_chat":
