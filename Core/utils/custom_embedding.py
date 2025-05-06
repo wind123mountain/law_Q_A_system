@@ -56,7 +56,7 @@ class M3Embeddings(Embeddings):
         return torch.cat(dense_vecs, dim=0)
     
 class M3EmbeddingsAPI(Embeddings):
-    def __init__(self, nvidia_api_key, batch_size):
+    def __init__(self, nvidia_api_key, batch_size=8):
         client = OpenAI(api_key=nvidia_api_key, base_url="https://integrate.api.nvidia.com/v1")
         self.embeddings = client.embeddings
 

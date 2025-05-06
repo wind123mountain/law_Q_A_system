@@ -1,4 +1,5 @@
 import uuid
+import os
 from typing import List, Optional, Tuple
 
 from langchain.retrievers import ParentDocumentRetriever
@@ -16,8 +17,13 @@ from utils.vector_store import init_vector_store
 
 
 MONGODB_USER = "reader"
-with open("mongo_read_pass.txt", "r", encoding="utf-8") as file:
-    MONGODB_PASS = file.read()
+
+if os.path.exists('mongo_read_pass.txt'):
+    with open("mongo_read_pass.txt", "r", encoding="utf-8") as file:
+        MONGODB_PASS = file.read()
+else:
+    MONGODB_PASS = ""
+
 MONGODB_URL = f"mongodb+srv://<user>:<pass_word>@cluster.ovvrd.mongodb.net/?retryWrites=true&w=majority&appName=cluster"
 
 class CustomParentDocumentRetriever(ParentDocumentRetriever):
@@ -117,17 +123,32 @@ class CustomParentDocumentRetriever(ParentDocumentRetriever):
         docs = await self.docstore.amget(ids)
         return docs, chunks
 
+def len_tokenizer(text: str) -> int:
+    """Tokenizes the text using the Vietnamese tokenizer."""
+    # Placeholder for actual tokenization logic
+    return len(text.split())
+
 def init_retriever(mongodb_db="law"):
     mongodb_url = MONGODB_URL.replace("<user>", MONGODB_USER).replace("<pass_word>", MONGODB_PASS)
     mongodb_doc_store = MongoDBDocstore(mongodb_url=mongodb_url, db=mongodb_db)
 
-    parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=0, 
-                                                    separators=[r'\n (?<!“)Điều \d+\. '], 
-                                                    is_separator_regex=True)
 
-    child_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=0, 
-                                                    separators=[r'\n (?<!“)\d+\. ', r'\n (?<!“)[a-z]+\) '], 
-                                                    is_separator_regex=True)
+    parent_splitter = RecursiveCharacterTextSplitter(chunk_size=1024, chunk_overlap=0,
+                                                    separators=[r"[P][Hh][Ầầ][Nn] [0-9IVXLCDM]+[^A-Za-z0-9]",
+                                                                r"[C][Hh][Ưư][Ơơ][Nn][Gg] [0-9IVXLCDM]+[^A-Za-z0-9]",
+                                                                r"[M][Ụụ][Cc] [0-9IVXLCDM]+[^A-Za-z0-9]",
+                                                                r'\n (?<!“)Điều \d+\w*[\.:] (?![^“]*”)',
+                                                                r'\n (?<!“)Điều \d+ \n (?![^“]*”)',],
+                                                    is_separator_regex=True, length_function=len_tokenizer)
+
+    child_splitter = RecursiveCharacterTextSplitter(chunk_size=255, chunk_overlap=0,
+                                                    separators=[r'\n (?<!“)Điều \d+\w*[\.:] (?![^“]*”)',
+                                                                r'\n (?<!“)Điều \d+ \n (?![^“]*”)',
+                                                                r'\n (?<!“)\d+\w*\. (?![^“]*”)',
+                                                                r'\n (?<!“)[a-z]+\ (?![^“]*”)',
+                                                                r'\n', r'\. '
+                                                                ],
+                                                    is_separator_regex=True, length_function=len_tokenizer)
     
     vector_store = init_vector_store()
 
