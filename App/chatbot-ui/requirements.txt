@@ -1,6 +1,7 @@
 tenacity
 requests==2.32.3
-streamlit>=1.42.0
+streamlit==1.44.1
 Authlib>=1.3.2
 st-pages
 st-star-rating
+python-dotenv

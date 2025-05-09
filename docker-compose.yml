@@ -5,7 +5,7 @@ services:
     image: be_qa:3003
     container_name: fastapi_app
     command: bash -c "
-        pip install python-jose[cryptography]
+        pip install python-jose[cryptography] python-dotenv
         && python app.py 
       "
     volumes:
@@ -16,7 +16,6 @@ services:
       - mongo
     env_file:
       - .env
-      - ./App/backend/src/.env
     environment:
       REDIS_URL: redis://redis_server:6379/0
       MONGODB_URL: ${MONGODB_URL}
@@ -36,7 +35,10 @@ services:
   worker:
     image: be_qa:3003
     container_name: worker
-    command: celery -A tasks.celery_app worker --pool=solo --loglevel=warning
+    command: bash -c "
+        pip install python-dotenv
+        && celery -A tasks.celery_app worker --pool=solo --loglevel=warning
+      "
     volumes:
       - ./App/backend/src:/app
       - ./pretrained:/root/.cache/huggingface/hub/
@@ -45,7 +47,6 @@ services:
       - mongo
     env_file:
       - .env
-      - ./App/backend/src/.env
     environment:
       REDIS_URL: redis://redis_server:6379/0
       MONGODB_URL: ${MONGODB_URL}
@@ -64,9 +65,6 @@ services:
           - driver: nvidia
             device_ids: ['0']
             capabilities: [gpu]
-    # ports:
-    #   - "8000:8000"
-
 
   redis:
     image: redis:6.2-alpine
@@ -83,7 +81,6 @@ services:
       - ./pretrained:/root/.cache/huggingface/hub/
     env_file:
       - .env
-      - ./App/chatbot-ui/.env
     environment:
       BACKEND_URL: ${BACKEND_URL}
     ports:
