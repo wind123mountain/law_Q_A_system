@@ -82,7 +82,7 @@ class Retrieval(metaclass=Singleton):
 class Generation:
     def __init__(self):
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
             temperature=0,
             max_tokens=None,
             timeout=None,
