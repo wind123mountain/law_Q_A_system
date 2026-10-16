@@ -23,16 +23,30 @@ class CustomParentDocumentRetriever(ParentDocumentRetriever):
         ids: Optional[List[str]] = None,
         add_to_docstore: bool = True,
     ) -> Tuple[List[Document], List[Tuple[str, Document]]]:
-        if self.parent_splitter is not None:
-            documents = self.parent_splitter.split_documents(documents)
+        # Split each source document separately so parent ids can be derived from its id
+        parents = []
+        stable_ids = []
+        for doc in documents:
+            chunks = (
+                self.parent_splitter.split_documents([doc])
+                if self.parent_splitter is not None
+                else [doc]
+            )
+            parents.extend(chunks)
+            if doc.id:
+                # Stable ids: re-indexing the same document overwrites instead of duplicating
+                stable_ids.extend(f"{doc.id}_{i}" for i in range(len(chunks)))
+            else:
+                stable_ids.extend(str(uuid.uuid4()) for _ in chunks)
+
         if ids is None:
-            doc_ids = [str(uuid.uuid4()) for _ in documents]
+            doc_ids = stable_ids
             if not add_to_docstore:
                 raise ValueError(
                     "If ids are not passed in, `add_to_docstore` MUST be True"
                 )
         else:
-            if len(documents) != len(ids):
+            if len(parents) != len(ids):
                 raise ValueError(
                     "Got uneven list of documents and ids. "
                     "If `ids` is provided, should be same length as `documents`."
@@ -41,7 +55,7 @@ class CustomParentDocumentRetriever(ParentDocumentRetriever):
 
         docs = []
         full_docs = []
-        for i, doc in enumerate(documents):
+        for i, doc in enumerate(parents):
             _id = doc_ids[i]
             sub_docs = self.child_splitter.split_documents([doc])
             if self.child_metadata_fields is not None:
@@ -49,12 +63,27 @@ class CustomParentDocumentRetriever(ParentDocumentRetriever):
                     _doc.metadata = {
                         k: _doc.metadata[k] for k in self.child_metadata_fields
                     }
-            for _doc in sub_docs:
+            for j, _doc in enumerate(sub_docs):
                 _doc.metadata[self.id_key] = _id
+                # Qdrant point ids must be UUIDs; derive one deterministically from the parent id
+                _doc.id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{_id}/{j}"))
             docs.extend(sub_docs)
             full_docs.append((_id, doc))
 
         return docs, full_docs
+
+    def add_documents(
+        self,
+        documents: List[Document],
+        ids: Optional[List[str]] = None,
+        add_to_docstore: bool = True,
+        **kwargs,
+    ) -> None:
+        docs, full_docs = self._split_docs_for_adding(documents, ids, add_to_docstore)
+        # Parents first: if the child write fails, no child ever points to a missing parent
+        if add_to_docstore:
+            self.docstore.mset(full_docs)
+        self.vectorstore.add_documents(docs, ids=[doc.id for doc in docs], **kwargs)
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun

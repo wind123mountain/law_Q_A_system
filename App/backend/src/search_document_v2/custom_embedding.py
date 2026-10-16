@@ -59,8 +59,10 @@ class M3EmbeddingsAPI(Embeddings):
     """BGE-M3 dense embeddings"""
 
     def __init__(self, api_key, base_url="https://integrate.api.nvidia.com/v1",
-                 model="baai/bge-m3", batch_size=8):
-        client = OpenAI(api_key=api_key, base_url=base_url)
+                 model="baai/bge-m3", batch_size=8, max_retries=8):
+        # The SDK retries 429/5xx/connection errors with exponential backoff (honours Retry-After);
+        # the default of 2 retries is too few when indexing tens of thousands of chunks
+        client = OpenAI(api_key=api_key, base_url=base_url, max_retries=max_retries, timeout=60)
         self.embeddings = client.embeddings
 
         self.model = model

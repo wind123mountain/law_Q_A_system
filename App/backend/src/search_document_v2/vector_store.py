@@ -9,7 +9,7 @@ from .custom_embedding import M3EmbeddingsAPI
 
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-COLLECTION_NAME = "law_collection_backup"
+COLLECTION_NAME = os.getenv("COLLECTION_NAME", "law_collection_backup")
 
 # Embedding qua API tương thích OpenAI; NVIDIA_API_KEY vẫn được hỗ trợ cho tương thích ngược
 EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY") or os.getenv("NVIDIA_API_KEY")
@@ -57,6 +57,13 @@ def init_vector_store():
                 )
             },
         )
+
+    # Retrieval filters on metadata.status
+    qdrant_client.create_payload_index(
+        collection_name=COLLECTION_NAME,
+        field_name="metadata.status",
+        field_schema=models.PayloadSchemaType.KEYWORD,
+    )
 
     vector_store = QdrantVectorStore(
         client=qdrant_client,
