@@ -41,6 +41,8 @@ class CompleteRequest(BaseModel):
     conversation_id: str
     user_message: str
     sync_request: Optional[bool] = False
+    # Knowledge-graph retrieval for this question; None = ENABLE_GRAPH_RETRIEVAL from .env
+    use_graph: Optional[bool] = None
 
 
 class RetrievalRequest(BaseModel):
@@ -65,6 +67,9 @@ async def conversations(id: str, request: Request):
             {
                 "role": "assistant" if not conv["is_request"] else "human",
                 "content": str(conv["message"]),
+                # Answer mode and knowledge-graph result (absent on messages saved before graph mode)
+                "use_graph": conv.get("use_graph"),
+                "graph": conv.get("graph"),
             }
             for conv in db_conversation
         ]
@@ -130,6 +135,7 @@ async def complete(data: CompleteRequest):
             "user_id": user_id,
             "conv_id": conversation_id,
             "question": user_message,
+            "use_graph": data.use_graph,
         },
     )
     return {"task_id": task.id}
@@ -151,6 +157,16 @@ async def get_response(task_id: str):
 
         # Nếu task đã hoàn tất, trả về kết quả
         if task_status not in ("PENDING", "STARTED"):
+            if task_status == "FAILURE":
+                # The result of a failed task is the exception itself, which does not
+                # serialize to JSON; return its type and message so the UI can show them
+                error = task_result.result
+                logger.error(f"Task {task_id} failed: {type(error).__name__}: {error}")
+                return {
+                    "task_id": task_id,
+                    "task_status": task_status,
+                    "error_message": f"{type(error).__name__}: {str(error)[:200]}",
+                }
             return {
                 "task_id": task_id,
                 "task_status": task_status,

@@ -1,4 +1,6 @@
+import logging
 import os
+import re
 
 import numpy as np
 import torch
@@ -8,18 +10,38 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pinecone import Pinecone
 from qdrant_client import models
 from search_document_v2.custom_retriever import init_retriever
+from search_document_v2.graph_retriever import GraphResult, GraphRetriever
 
 
 THRESHOLD_SCORE_RERANK = 0.5
+# Default for questions that do not choose (the UI toggle sends use_graph per question)
+ENABLE_GRAPH_RETRIEVAL = os.getenv("ENABLE_GRAPH_RETRIEVAL", "true").lower() == "true"
+
+logger = logging.getLogger(__name__)
+
+
+def _text(content):
+    """LLM message content as a string (some models return a list of parts)."""
+    if isinstance(content, list):
+        content = "".join(part if isinstance(part, str) else part.get("text", "") for part in content)
+    return (content or "").strip()
+
+
+def _article_label(text):
+    """First article heading in a chunk, e.g. "Điều 55. Hội đồng thành viên" (for display)."""
+    match = re.search(r"Điều \d+\w*\.[^\n]{0,70}", text)
+    return match.group(0).strip() if match else text.strip()[:70]
 
 
 class Singleton(type):
-    def __init__(self, name, bases, mmbs):
-        super(Singleton, self).__init__(name, bases, mmbs)
-        self._instance = super(Singleton, self).__call__()
+    # Create the instance on the first call, with that call's arguments, then reuse it.
+    # (Creating it at class definition ignored the arguments and connected on import.)
+    _instance = None
 
-    def __call__(self, *args, **kw):
-        return self._instance
+    def __call__(cls, *args, **kw):
+        if cls._instance is None:
+            cls._instance = super(Singleton, cls).__call__(*args, **kw)
+        return cls._instance
 
 
 class Retrieval(metaclass=Singleton):
@@ -42,48 +64,106 @@ class Retrieval(metaclass=Singleton):
         # reranker.compute_score(["mode to gpu", "cuda"])
         # self.reranker = reranker
 
+        # Always loaded so each question can turn graph retrieval on or off without a restart;
+        # it disables itself if the graph collections are missing
+        self.graph = GraphRetriever()
+
     def search(self, query):
+        """Parent documents for the question (kept for callers that do not use the graph result)."""
+        docs, _ = self.retrieve(query)
+        return docs
+
+    def retrieve(self, query, keywords=None, use_graph=None):
+        """Return (parent documents, GraphResult). keywords come from detect_user_intent;
+        use_graph=None falls back to ENABLE_GRAPH_RETRIEVAL. Without graph mode the GraphResult is empty."""
+        if use_graph is None:
+            use_graph = ENABLE_GRAPH_RETRIEVAL
         parent_docs, candidates = self.retriever.invoke(query)
-        if len(candidates) == 0:
-            return []
 
-        # inputs = [[query, candidate[0].page_content] for candidate in candidates]
-        # scores = self.reranker.compute_score(inputs, batch_size=2)
-        # sorted_indices = np.argsort(scores)[::-1]
-
-        inputs_docs = [
-            {"id": candidate[0].metadata["doc_id"], "text": candidate[0].page_content}
-            for candidate in candidates
+        # Rerank candidates as (parent id, text): hybrid search children ...
+        rerank_inputs = [
+            (candidate[0].metadata["doc_id"], candidate[0].page_content) for candidate in candidates
         ]
+        # ... plus parents found through the knowledge graph that hybrid search missed,
+        # reranked on their own text so that noisy graph matches are filtered out
+        graph_result = GraphResult()
+        graph_ids = []
+        if use_graph:
+            graph_result = self.graph.search(query, keywords)
+            graph_ids = [pid for pid in graph_result.parent_ids if pid not in parent_docs]
+            if graph_ids:
+                parent_docs.update(self.retriever.docstore.mget(graph_ids))
+                rerank_inputs += [(pid, parent_docs[pid].page_content) for pid in graph_ids if pid in parent_docs]
+                logger.info(f"Graph added {len(graph_ids)} candidate parents: {graph_ids}")
+
+        if not rerank_inputs:
+            return [], graph_result
+
         rerank_results = self.reranker.rerank(
             model="bge-reranker-v2-m3",
             query=query,
-            documents=inputs_docs,
-            top_n=self.top_n,
+            # Unique ids: several children of the same parent can be candidates
+            documents=[{"id": str(i), "text": text} for i, (_, text) in enumerate(rerank_inputs)],
+            top_n=len(rerank_inputs),
             return_documents=False,
             parameters={"truncate": "END"},
         )
 
         top_k_docs = []
-        for i in range(self.top_k):
-            if rerank_results.data[i].score < THRESHOLD_SCORE_RERANK:
+        seen_parents = set()
+        for result in rerank_results.data:
+            if result.score < THRESHOLD_SCORE_RERANK:
                 break
 
-            top_k_docs.append(
-                parent_docs[
-                    candidates[rerank_results.data[i].index][0].metadata["doc_id"]
-                ]
-            )
-            # = [parent_docs[rerank_results.data[i][0].metadata['doc_id']]] #sorted_indices[:self.top_k]]
+            doc_id = rerank_inputs[result.index][0]
+            if doc_id in seen_parents or doc_id not in parent_docs:
+                continue
+            seen_parents.add(doc_id)
+            top_k_docs.append(parent_docs[doc_id])
 
-        return top_k_docs
+            if len(top_k_docs) == self.top_k:
+                break
+
+        # Which articles the graph added that hybrid search missed, and whether they reached the answer
+        graph_result.added_parents = [
+            {
+                "id": pid,
+                "title": parent_docs[pid].metadata.get("title", ""),
+                "article": _article_label(parent_docs[pid].page_content),
+                "used": pid in seen_parents,
+            }
+            for pid in graph_ids if pid in parent_docs
+        ]
+        return top_k_docs, graph_result
+
+
+# Some parents cannot be split (e.g. appendices without article headings) and reach tens of
+# thousands of characters; cap each one in the prompt
+MAX_DOC_CHARS = 12000
+NO_ANSWER_MESSAGE = (
+    "Xin lỗi, tôi chưa tạo được câu trả lời cho câu hỏi này. "
+    "Bạn có thể diễn đạt lại câu hỏi cụ thể hơn (ví dụ nêu rõ loại hình doanh nghiệp hoặc vấn đề cần hỏi)."
+)
+PARAPHRASE_INSTRUCTION = (
+    " Answer in your own words: summarise the provisions and cite them by article number "
+    "(e.g. 'theo khoản 1 Điều 188'); do not copy long passages of the legal text verbatim."
+)
 
 
 class Generation:
     def __init__(self):
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
             temperature=0,
+            max_tokens=None,
+            timeout=None,
+            max_retries=2,
+        )
+        # Retry client for answers blocked as RECITATION (Gemini refuses to reproduce long source
+        # passages verbatim); a little randomness helps it paraphrase instead of copying
+        self.paraphrase_llm = ChatGoogleGenerativeAI(
+            model=os.getenv("GEMINI_MODEL", "gemini-3.6-flash"),
+            temperature=0.5,
             max_tokens=None,
             timeout=None,
             max_retries=2,
@@ -112,7 +192,7 @@ class Generation:
         ]
 
         answer = self.llm.invoke(messages).content
-        result = answer.lower() == "yes"
+        result = re.match(r"\W*yes\b", answer.strip().lower()) is not None
 
         if not result:
             explanation = self.llm.invoke(messages_explanation).content
@@ -121,12 +201,21 @@ class Generation:
 
         return result, explanation
 
-    def generate(self, question, docs: Document, history_summary=None):
+    def generate(self, question, docs: Document, history_summary=None, graph_context=""):
         context = [
-            f"- doc 1: + info:{doc.metadata} \n + content:{doc.page_content}"
-            for doc in docs
+            f"- doc {i}: + info:{doc.metadata} \n + content:{doc.page_content[:MAX_DOC_CHARS]}"
+            for i, doc in enumerate(docs, start=1)
         ]
         context = "\n".join(context)
+
+        # Knowledge-graph facts link concepts across articles / documents (LightRAG-style context);
+        # the law texts stay the source to cite
+        if graph_context:
+            context += (
+                "\n\nRelated legal concepts and relations, extracted from the same legal texts "
+                "(use them to connect provisions across articles and documents; when you rely on one, "
+                "cite the article it mentions):\n" + graph_context
+            )
 
         messages = [
             (
@@ -143,9 +232,22 @@ class Generation:
         ]
 
         ai_msg = self.llm.invoke(messages)
+        answer = _text(ai_msg.content)
+        if answer:
+            return answer
 
-        return ai_msg.content
-    
+        # Empty answer: usually finish_reason RECITATION. Retry once asking for a paraphrase
+        finish_reason = (ai_msg.response_metadata or {}).get("finish_reason")
+        logger.warning(f"Empty answer (finish_reason={finish_reason}); retrying with a paraphrase instruction")
+        retry_messages = [(messages[0][0], messages[0][1] + PARAPHRASE_INSTRUCTION), messages[1]]
+        retry_msg = self.paraphrase_llm.invoke(retry_messages)
+        answer = _text(retry_msg.content)
+        if answer:
+            return answer
+
+        logger.warning(f"Empty answer after retry (finish_reason={(retry_msg.response_metadata or {}).get('finish_reason')})")
+        return NO_ANSWER_MESSAGE
+
     def generate_for_search_internet(self, question, context, history_summary=None):
         
         messages = [
@@ -173,13 +275,13 @@ class Assistant(metaclass=Singleton):
         self.generation = Generation()
         self.llm = self.generation.llm
 
-    def ask(self, question):
+    def ask(self, question, use_graph=None):
         result, explanation = self.generation.check_question(question)
         if not result:
             return explanation
 
-        docs = self.retrieval.search(question)
-        answer = self.generation.generate(question, docs)
+        docs, graph = self.retrieval.retrieve(question, use_graph=use_graph)
+        answer = self.generation.generate(question, docs, graph_context=graph.context)
 
         return answer
     

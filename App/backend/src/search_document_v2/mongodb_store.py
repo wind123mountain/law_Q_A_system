@@ -21,6 +21,8 @@ class MongoDBDocstore(BaseStore):
 
             self.law_db = self.client[db]
             self.collection = self.law_db["documents"]
+            # Speeds up mget and rejects duplicate parent ids
+            self.collection.create_index("id", unique=True)
         except Exception as e:
             print("Exception:", e)
 
@@ -34,12 +36,17 @@ class MongoDBDocstore(BaseStore):
 
     def mset(self, key_value_pairs):
         """Lưu nhiều Parent Documents vào MongoDB."""
-        docs_to_insert = [
-            {"id": key, "metadata": value.metadata, "content": value.page_content}
+        # Upsert by id so re-indexing a document overwrites it instead of duplicating
+        operations = [
+            pymongo.ReplaceOne(
+                {"id": key},
+                {"id": key, "metadata": value.metadata, "content": value.page_content},
+                upsert=True,
+            )
             for key, value in key_value_pairs
         ]
-
-        self.collection.insert_many(docs_to_insert)
+        if operations:
+            self.collection.bulk_write(operations, ordered=False)
 
     def mdelete(self, keys):
         """Xóa Parent Document khỏi MongoDB."""

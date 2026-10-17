@@ -56,11 +56,19 @@ class M3Embeddings(Embeddings):
         return torch.cat(dense_vecs, dim=0)
     
 class M3EmbeddingsAPI(Embeddings):
-    def __init__(self, nvidia_api_key, batch_size=8):
-        client = OpenAI(api_key=nvidia_api_key, base_url="https://integrate.api.nvidia.com/v1")
+    """BGE-M3 dense embeddings"""
+
+    def __init__(self, api_key, base_url="https://integrate.api.nvidia.com/v1",
+                 model="baai/bge-m3", batch_size=8, max_retries=8):
+        # The SDK retries 429/5xx/connection errors with exponential backoff (honours Retry-After);
+        # the default of 2 retries is too few when indexing tens of thousands of chunks
+        client = OpenAI(api_key=api_key, base_url=base_url, max_retries=max_retries, timeout=60)
         self.embeddings = client.embeddings
 
+        self.model = model
         self.batch_size = batch_size
+        # "truncate" là tham số riêng của NVIDIA, provider khác có thể báo lỗi
+        self.extra_body = {"truncate": "NONE"} if "nvidia.com" in base_url else None
 
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
@@ -76,9 +84,9 @@ class M3EmbeddingsAPI(Embeddings):
 
         for start_batch in range(0, len(texts), self.batch_size): 
             response = self.embeddings.create(input=texts[start_batch:start_batch + self.batch_size],
-                                              model="baai/bge-m3",
+                                              model=self.model,
                                               encoding_format="float",
-                                              extra_body={"truncate": "NONE"})
+                                              extra_body=self.extra_body)
 
             for data in response.data:
                 dense_vecs.append(data.embedding)

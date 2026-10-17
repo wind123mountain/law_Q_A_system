@@ -9,9 +9,12 @@ from .custom_embedding import M3EmbeddingsAPI
 
 QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-COLLECTION_NAME = "law_collection_backup"
+COLLECTION_NAME = os.getenv("COLLECTION_NAME", "law_collection_backup")
 
-NVIDIA_API_KEY = os.getenv("NVIDIA_API_KEY", None)
+# Embedding qua API tương thích OpenAI; NVIDIA_API_KEY vẫn được hỗ trợ cho tương thích ngược
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY") or os.getenv("NVIDIA_API_KEY")
+EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", "https://integrate.api.nvidia.com/v1")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "baai/bge-m3")
 
 
 def init_vector_store():
@@ -22,8 +25,12 @@ def init_vector_store():
     model_kwargs = {"torch_dtype": torch.float16, "device": device}
     encode_kwargs = {"batch_size": 8, "normalize_embeddings": True}
 
-    if NVIDIA_API_KEY:
-        bge_m3_emb = M3EmbeddingsAPI(nvidia_api_key=NVIDIA_API_KEY)
+    if EMBEDDING_API_KEY:
+        bge_m3_emb = M3EmbeddingsAPI(
+            api_key=EMBEDDING_API_KEY,
+            base_url=EMBEDDING_BASE_URL,
+            model=EMBEDDING_MODEL,
+        )
     else:
         bge_m3_emb = HuggingFaceBgeEmbeddings(
             model_name=model_name,
@@ -50,6 +57,13 @@ def init_vector_store():
                 )
             },
         )
+
+    # Retrieval filters on metadata.status
+    qdrant_client.create_payload_index(
+        collection_name=COLLECTION_NAME,
+        field_name="metadata.status",
+        field_schema=models.PayloadSchemaType.KEYWORD,
+    )
 
     vector_store = QdrantVectorStore(
         client=qdrant_client,
