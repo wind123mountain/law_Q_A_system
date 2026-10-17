@@ -1,4 +1,6 @@
+import json
 import logging
+import re
 
 from assistant import Assistant
 
@@ -26,8 +28,20 @@ def generate_conversation_text(conversations):
     return conversation_text
 
 
+# Original rewrite instruction (graph mode off)
+PLAIN_REWRITE_INSTRUCTIONS = "Please return only the rewritten sentence. Please answer in Vietnamese."
+
+# Graph mode: the same call also extracts LightRAG low / high-level keywords
+KEYWORD_INSTRUCTIONS = """
+    Also extract keywords from the rewritten question, in Vietnamese:
+    - low_level: specific legal entities it mentions (e.g. "hội đồng thành viên", "giấy chứng nhận đăng ký doanh nghiệp")
+    - high_level: the themes or kinds of relation it asks about (e.g. "bổ nhiệm, miễn nhiệm", "chuyển đổi loại hình doanh nghiệp")
+
+    Return only JSON: {"question": "...", "low_level": ["..."], "high_level": ["..."]}"""
+
+
 # Dựa vào history và câu hỏi hiện tại => Viết lại câu hỏi.
-def detect_user_intent(history_messages, message):
+def detect_user_intent(history_messages, message, extract_keywords=True):
     logger.info(f"History messages: {history_messages}")
     logger.info(f"messages: {message}")
     # Update documents to prompt
@@ -37,7 +51,7 @@ def detect_user_intent(history_messages, message):
     traffic laws, economic regulations, etc., so ensure the intent of the user is accurately
     identified at the current moment to rephrase the query as precisely as possible. 
     The rewritten question should be clear, complete, and understandable without additional context.
-    Please return only the rewritten sentence. Please answer in Vietnamese.
+    {KEYWORD_INSTRUCTIONS if extract_keywords else PLAIN_REWRITE_INSTRUCTIONS}
 
     Chat History:
     {history_messages}
@@ -49,10 +63,27 @@ def detect_user_intent(history_messages, message):
         ("human", user_prompt),
     ]
     logger.info(f"Rephrase input messages: {gemini_messages}")
-    
-    new_question = assistant.llm.invoke(gemini_messages).content
 
-    return new_question
+    content = assistant.llm.invoke(gemini_messages).content
+    if isinstance(content, list):  # some models return content as a list of parts
+        content = "".join(part if isinstance(part, str) else part.get("text", "") for part in content)
+    if not extract_keywords:
+        return content.strip(), None
+    raw = re.sub(r"^```(?:json)?\s*|\s*```$", "", content.strip())
+
+    # Rewrite + LightRAG keywords in one call; fall back to the plain rewritten text
+    # (graph search then uses the whole question) if the model did not return valid JSON
+    try:
+        data = json.loads(raw)
+        question = str(data.get("question") or "").strip() or message
+        keywords = {
+            "low_level": [str(k).strip() for k in data.get("low_level") or [] if str(k).strip()],
+            "high_level": [str(k).strip() for k in data.get("high_level") or [] if str(k).strip()],
+        }
+        return question, keywords
+    except (json.JSONDecodeError, AttributeError):
+        logger.warning("Rephrase did not return JSON; continuing without graph keywords")
+        return raw or message, None
 
 # define agent for process search internet + gen response
 def get_legal_agent_anwer(history_messages, question):

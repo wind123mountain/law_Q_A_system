@@ -99,7 +99,10 @@ def update_chat_conversation(
     conversation_id: str,
     message: str,
     is_request: bool = True,
+    extra: dict = None,
 ):
+    """Save one message. extra: additional fields stored with it (e.g. the answer mode and the
+    knowledge-graph result, so the UI can show them again when the conversation is reloaded)."""
     # Step 1: Create a new ChatConversation instance
 
     if conversation_id == "new_chat":
@@ -115,7 +118,7 @@ def update_chat_conversation(
     )
 
     # Step 4: Save the ChatConversation instance
-    chat_conversations.insert_one(new_conversation.to_dict())
+    chat_conversations.insert_one({**new_conversation.to_dict(), **(extra or {})})
 
     logger.info(f"Create message for conversation {conversation_id}")
 
